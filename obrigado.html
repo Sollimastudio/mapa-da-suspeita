@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pagamento recebido | Mapa da Suspeita™</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--ink:#10090c;--surface:#1a1014;--wine:#5a1427;--gold:#c9a86a;--ivory:#f6efe8;--muted:#c8bab3;--line:#3b2730;--danger:#d86b74}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 85% 8%,rgba(90,20,39,.25),transparent 30rem),var(--ink);color:var(--ivory);font:16px/1.55 Inter,sans-serif;padding:24px}.card{width:min(100%,620px);background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:34px;box-shadow:0 24px 70px rgba(0,0,0,.4);text-align:center}.display{font-family:"DM Serif Display",Georgia,serif}.eyebrow{color:var(--gold);text-transform:uppercase;letter-spacing:.18em;font-size:12px;font-weight:800}.spinner{width:72px;height:72px;border:5px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin .85s linear infinite;margin:24px auto}@keyframes spin{to{transform:rotate(360deg)}}h1{font-size:44px;line-height:1.05;margin:10px 0 14px}.muted{color:var(--muted)}input,button{width:100%;min-height:50px;border-radius:13px;font:600 15px Inter,sans-serif}input{background:#10090c;border:1px solid var(--line);color:var(--ivory);padding:0 15px;margin:14px 0}button{border:0;background:var(--gold);color:var(--ink);cursor:pointer;padding:0 18px}.hidden{display:none}.error{color:var(--danger);font-size:14px}.small{font-size:13px;color:var(--muted);margin-top:18px}@media(max-width:620px){.card{padding:24px}h1{font-size:36px}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="eyebrow">Mapa da Suspeita™</div>
+    <div id="checking">
+      <div class="spinner"></div>
+      <h1 class="display">Estamos confirmando seu pagamento.</h1>
+      <p class="muted">Pix costuma ser confirmado em poucos segundos. No cartão, a aprovação pode levar um pouco mais.</p>
+      <p id="statusText" class="small">Verificando com segurança…</p>
+    </div>
+
+    <div id="emailBox" class="hidden">
+      <h1 class="display">Use o mesmo e-mail da compra.</h1>
+      <p class="muted">Isso conecta o pagamento ao teste que você acabou de responder.</p>
+      <input id="email" type="email" autocomplete="email" placeholder="seuemail@exemplo.com">
+      <button onclick="saveEmailAndCheck()">Confirmar meu pagamento</button>
+      <p id="error" class="error"></p>
+    </div>
+  </main>
+
+  <script>
+    let attempts = 0;
+    const maxAttempts = 40;
+    const sessionId = localStorage.getItem('mapaSessionId') || '';
+    let email = localStorage.getItem('mapaEmail') || '';
+
+    function showEmailBox(message='') {
+      document.getElementById('checking').classList.add('hidden');
+      document.getElementById('emailBox').classList.remove('hidden');
+      document.getElementById('email').value = email;
+      document.getElementById('error').textContent = message;
+    }
+
+    async function checkPayment() {
+      if (!sessionId) {
+        showEmailBox('Não encontramos a sessão deste teste neste aparelho. Volte ao teste e finalize novamente pelo mesmo navegador.');
+        return;
+      }
+      if (!email) {
+        showEmailBox();
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/status', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ email, sessionId })
+        });
+        const data = await response.json();
+
+        if (response.ok && data.status === 'paid') {
+          localStorage.setItem('mapaPaidState', JSON.stringify(data.state));
+          location.href = '/?unlock=1';
+          return;
+        }
+
+        if (!response.ok && response.status !== 404) {
+          throw new Error(data.error || 'Falha ao verificar o pagamento.');
+        }
+
+        attempts++;
+        document.getElementById('statusText').textContent = `Ainda aguardando confirmação… tentativa ${attempts} de ${maxAttempts}`;
+        if (attempts < maxAttempts) {
+          setTimeout(checkPayment, 3000);
+        } else {
+          showEmailBox('A confirmação ainda não chegou. Confira o e-mail e tente novamente em alguns minutos.');
+        }
+      } catch (error) {
+        showEmailBox(error.message || 'Não foi possível verificar agora.');
+      }
+    }
+
+    function saveEmailAndCheck() {
+      const value = document.getElementById('email').value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        document.getElementById('error').textContent = 'Digite um e-mail válido.';
+        return;
+      }
+      email = value;
+      localStorage.setItem('mapaEmail', email);
+      attempts = 0;
+      document.getElementById('emailBox').classList.add('hidden');
+      document.getElementById('checking').classList.remove('hidden');
+      checkPayment();
+    }
+
+    checkPayment();
+  </script>
+</body>
+</html>
