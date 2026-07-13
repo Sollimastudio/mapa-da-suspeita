@@ -1,6 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/assets/hero-mapa-da-suspeita.webp", "destination": "/assets/hero-emocional.svg" },
     { "source": "/obrigado", "destination": "/obrigado.html" }
   ],
   "headers": [
